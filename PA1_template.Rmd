@@ -1,25 +1,94 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Course Project 1"
+author: "Filippo D'Ercoli"
+date: "6/17/2020"
+output: html_document
+keep_md: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(lattice)
+```
 
 ## Loading and preprocessing the data
 
+First, I need to read the data into RStudio. A summary of the dataset is reported.
 
+```{r data overview}
+data <- read.csv("activity.csv")
+summary(data)
+```
 
 ## What is mean total number of steps taken per day?
 
+I summed the steps taken in each interval of a single day using "tapply". Then I plotted an histogram and calculated mean and median of the total number of steps taken per day.
 
+```{r}
+totalStepsPerDay <- tapply(data$steps, data$date, sum, na.rm=TRUE)
+hist(totalStepsPerDay, main = "Total Steps per Day")
+summary(totalStepsPerDay) [4]
+summary(totalStepsPerDay) [3]
+```
 
 ## What is the average daily activity pattern?
 
+I grouped the observations by interval and I calculated the mean of each group, obtaining a daily activity pattern. Then I plotted this pattern versus the intervals.
 
+```{r}
+dailyPattern <- group_by(data, interval) %>% summarise(intervalStepAvg = mean(steps, na.rm=TRUE))
+with(dailyPattern, plot(interval, intervalStepAvg, type = "l"))
+title(main = "Daily Activity Pattern")
+maxSteps <- max(dailyPattern$intervalStepAvg)
+maxInt <- subset(dailyPattern, dailyPattern$intervalStepAvg == maxSteps) [1]
+```
+
+The interval which on average registers the maximum number of steps is `r maxInt`.
 
 ## Imputing missing values
 
+```{r}
+totalNA <- sum(is.na(data$steps))
+```
 
+The total number of missing values is `r totalNA`. A suitable strategy for fill them in could be using the mean over the same 5-minute interval. A new dataset "imputedData" with the imputed values was created. Then I plotted the histogram of the new dataset and calculated again mean and median.
+
+```{r}
+imputedData <- data
+for (i in 1:length(data$steps)) {
+  if (is.na(data$steps [i])) {
+    if (i%%288 != 0) {
+      imputedData$steps [i] <- dailyPattern$intervalStepAvg [i%%288]
+    }
+    else imputedData$steps [i] <- dailyPattern$intervalStepAvg [288]
+  }
+}
+totalStepsPerDay2 <- tapply(imputedData$steps, imputedData$date, sum, na.rm=TRUE)
+hist(totalStepsPerDay2, main = "Total Steps per Day")
+summary(totalStepsPerDay2) [4]
+summary(totalStepsPerDay2) [3]
+```
+
+Imputing the data gives the histogram a more regular shape. The median is almost the same, while the mean increases a bit and happens to be equal to the median.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+I created a new variable called "dayLevel". It is a factor variable with 2 levels which identify weekdays and weekends.
+
+```{r}
+weekday <- weekdays(as.POSIXct.Date(imputedData$date))
+weekData <- mutate(imputedData, dayLevel = rep("weekday", length(imputedData$date)))
+for (i in 1:length(imputedData$date)) {
+  if (weekday[i] == "Saturday" || weekday[i] == "Sunday") {
+    weekData$dayLevel[i] <- "weekend"
+  }
+}
+```
+
+Then I grouped the observations by interval and dayLevel, calculated the average steps taken per interval and plotted it.
+
+```{r}
+weeklyPattern <- group_by(weekData, interval, dayLevel) %>% summarise(intervalStepAvg = mean(steps, na.rm=TRUE))
+xyplot(intervalStepAvg ~ interval | dayLevel, weeklyPattern, type = "l")
+```
